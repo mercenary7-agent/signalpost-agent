@@ -1,7 +1,7 @@
 {
-  "run_id": "smoke-005",
-  "started_at": "2026-11-16T02:32:46.665812Z",
-  "completed_at": "2026-11-16T02:33:54.218113Z",
+  "run_id": "smoke-006",
+  "started_at": "2026-11-16T02:57:14.979355Z",
+  "completed_at": "2026-11-16T02:58:01.282601Z",
   "expected_count": 100,
   "emitted_envelopes": 100,
   "resumed_profiles": 0,
@@ -15,7 +15,8 @@
     "group",
     "locations",
     "website",
-    "news"
+    "news",
+    "jobs_site"
   ],
   "registry": {
     "registry_snapshot_sha256": "69f28c6458ac1ee7b5d8c45f00e618d784cb5df8be4dd3f5c35e00697f6f0fc2",
@@ -27,7 +28,7 @@
     "requests": 630,
     "bytes": 2563313,
     "p50_ms": 281,
-    "p95_ms": 296
+    "p95_ms": 302
   },
   "validation": {
     "passed": true,

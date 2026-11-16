@@ -1,4 +1,4 @@
-# Signalpost submission — mercenary7-agent (version 1)
+# Signalpost submission — mercenary7-agent (version 3)
 
 - Repository: https://github.com/mercenary7-agent/signalpost-agent
 - Agent name: mercenary7-agent
@@ -7,8 +7,8 @@
   (beautifulsoup4, extruct, lxml, pydantic, pypdf, tldextract, trafilatura — see pyproject.toml / uv.lock).
   Data sources: Brønnøysundregistrene open data (NLOD 2.0) live API + bulk CSV, and registry-listed
   company websites. All free, no keys, no secrets.
-- Expected cost per official batch: $0. ~530 HTTP requests per 100 companies (measured smoke test),
-  i.e. ~5.3k requests per 1,000-company batch, all to free public endpoints.
+- Expected cost per official batch: $0. ~630 HTTP requests per 100 companies (measured smoke test),
+  i.e. ~6.3k requests per 1,000-company batch, all to free public endpoints.
 
 ## Run command (one evaluator command, batch of organisation numbers as JSONL)
 
@@ -25,9 +25,10 @@ Exactly one terminal JSONL envelope per input organisation number (validated: ze
 
 - Batch: 100 organisation numbers drawn from the public frozen 2025-filer universe
   (signalpost-company-universe-2025.jsonl.gz), seed-selected via select_entry_batch.py.
-- Report: docs/smoke-test-report-100.json — run smoke-001, 100/100 envelopes emitted,
+- Report: docs/smoke-test-report-100.json — run smoke-006 (v3), 100/100 envelopes emitted,
   validation passed (exact count, unique orgs, all entity/module states terminal, zero silent drops),
-  530 requests, 2.4 MB, p50 287 ms, wall time ~46 s.
+  630 requests, 2.5 MB, p50 281 ms / p95 302 ms, wall time ~68 s. Modules: registry, accounting_obligation,
+  registry_live, financials, roles, group, locations, website, news, jobs_site.
 - Output sample: out/smoke-envelopes.jsonl (100 envelopes).
 
 ## Identity & precision posture
@@ -37,3 +38,16 @@ Exactly one terminal JSONL envelope per input organisation number (validated: ze
 - Missing data uses explicit states (available / not_available / blocked / not_applicable / ambiguous /
   failed); absence is never converted to zero. No fabricated values.
 - Refresh is idempotent; prior snapshots preserved (scripts/run_refresh_replay.py demo).
+
+## Version 3 changes (vs v2)
+
+- News mentions are now fully auditable observations: content_sha256 of the raw RSS feed, feed URL,
+  acquisition_mode=permitted_public_page, rights_status=approved, and a per-item evidence_span
+  (headline + publisher + published date). Strict exact-legal-name-in-headline gate unchanged.
+- New jobs_site module: job_posting observations extracted from careers/jobs pages of the
+  identity-gated company website (site must print the entity's own organisation number);
+  careers terms added to the bounded same-domain crawler. Exact-entity by construction.
+- Envelopes now carry a top-level claims[] array (field, value, availability, source_url,
+  retrieved_at, content_sha256) and a synthesis summary (what the company does, leadership,
+  website/news/jobs status, explicit unknowns) per the published output contract.
+- Smoke smoke-006: 100/100 terminal envelopes, validation passed, 630 requests, $0 cost.

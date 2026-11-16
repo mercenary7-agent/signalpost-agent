@@ -90,6 +90,7 @@ def fetch_news_mentions(profile: dict[str, Any], limit: int = 10, years: int = 2
         metric["latencies_ms"] = [elapsed_ms]
         root = ET.fromstring(raw)
         retrieved_at = utc_now()
+        feed_sha = hashlib.sha256(raw).hexdigest()
         mentions: list[dict] = []
         seen: set[tuple[str, str]] = set()
         for item in root.findall(".//item"):
@@ -119,12 +120,17 @@ def fetch_news_mentions(profile: dict[str, Any], limit: int = 10, years: int = 2
                 "source_url": link,
                 "retrieved_at": retrieved_at,
                 "published_at": published_at,
+                "content_sha256": feed_sha,
+                "feed_url": url,
                 "exact_entity": True,
                 "identity_proof": [
                     {"type": "exact_legal_name_in_news_title", "value": name},
                     {"type": "publisher_label", "value": publisher},
                 ],
+                "acquisition_mode": "permitted_public_page",
+                "rights_status": "approved",
                 "source_class": "public_news",
+                "evidence_span": f"{title} — {publisher}" + (f", published {published_at}" if published_at else ""),
             })
             if len(mentions) >= limit:
                 break

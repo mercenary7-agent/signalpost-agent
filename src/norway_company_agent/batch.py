@@ -113,6 +113,83 @@ def evidence_terminal_state(record: dict[str, Any] | None) -> str:
     return "submission_error"
 
 
+def _claim_from_record(field: str, record: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not record or record.get("status") in {None, "not_fetched"}:
+        return None
+    value = record.get("value")
+    if isinstance(value, dict):
+        shown = {k: v for k, v in list(value.items())[:8] if not isinstance(v, (list, dict))}
+        if not shown and value:
+            shown = {"keys": sorted(map(str, value.keys()))[:12]}
+        value = shown if shown else "see evidence value"
+    return {
+        "field": field,
+        "value": value,
+        "availability": record.get("status"),
+        "source_url": record.get("source_url"),
+        "source_class": record.get("source_class") or record.get("source_type"),
+        "retrieved_at": record.get("retrieved_at"),
+        "as_of": record.get("as_of"),
+        "content_sha256": record.get("content_sha256"),
+        "note": record.get("note"),
+    }
+
+
+def build_claims(profile: dict[str, Any]) -> list[dict[str, Any]]:
+    claims = []
+    for field, record in sorted((profile.get("evidence") or {}).items()):
+        claim = _claim_from_record(field, record)
+        if claim:
+            claims.append(claim)
+    return claims
+
+
+def build_synthesis(profile: dict[str, Any]) -> dict[str, Any]:
+    ev = profile.get("evidence") or {}
+    name = profile.get("name") or ""
+    org = profile.get("organisation_number") or ""
+    parts = [f"{name} (organisation number {org})"]
+    if profile.get("industry_label"):
+        parts.append(f"is registered as {profile['industry_label']} ({profile.get('industry_code') or 'no code'}) in {profile.get('municipality') or 'unknown municipality'}")
+    if profile.get("employees") is not None:
+        parts.append(f"reports {profile['employees']} employees")
+    else:
+        parts.append("has no registered employee count")
+    if profile.get("latest_submitted_accounts"):
+        parts.append(f"latest annual accounts filed for {profile['latest_submitted_accounts']}")
+    roles = (ev.get("roles") or {}).get("value")
+    if isinstance(roles, dict):
+        holders = roles.get("role_holders") or roles.get("holders") or []
+        if holders:
+            names = [str(h.get("name") or h.get("navn") or "") for h in holders[:3] if isinstance(h, dict)]
+            names = [n for n in names if n]
+            if names:
+                parts.append("registered leadership includes " + ", ".join(names))
+    website = ev.get("website") or {}
+    wval = website.get("value") or {}
+    wid = wval.get("identity_assessment") or {}
+    if website.get("status") == "available" and wid.get("publishable"):
+        parts.append(f"has a verified official website at {wval.get('final_url') or website.get('source_url')}")
+    else:
+        parts.append("no verified official website was found (marked not available, not zero)")
+    news = ev.get("news") or {}
+    mentions = (news.get("value") or {}).get("mentions") or []
+    if mentions:
+        newest = max((str(m.get("published_at") or "") for m in mentions), default="")
+        parts.append(f"appears in {len(mentions)} dated news item(s) with exact-name matches" + (f", newest {newest[:10]}" if newest else ""))
+    jobs = (ev.get("jobs_site") or {}).get("value") or {}
+    job_posts = jobs.get("job_postings") or []
+    if job_posts:
+        parts.append(f"lists {len(job_posts)} job posting(s) on its own careers page")
+    unknowns = []
+    for field, label in (("website", "official website"), ("news", "dated news activity"), ("jobs_site", "job postings"), ("financials", "normalized annual accounts")):
+        if (ev.get(field) or {}).get("status") in {"not_found", "blocked", "source_error", "not_applicable"}:
+            unknowns.append(label)
+    if unknowns:
+        parts.append("Not found (explicitly not available): " + ", ".join(unknowns))
+    return {"text": ". ".join(parts) + ".", "unknowns": unknowns}
+
+
 def terminal_envelope(
     profile: dict[str, Any],
     *,
@@ -137,6 +214,8 @@ def terminal_envelope(
         "started_at": started_at,
         "completed_at": completed_at,
         "modules": module_states,
+        "claims": build_claims(profile),
+        "synthesis": build_synthesis(profile),
         "profile": profile,
     }
 
