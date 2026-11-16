@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from norway_company_agent.batch import profile_complete_for_modules, profiles_from_bulk, read_organisation_inputs, terminal_envelope, validate_envelopes  # noqa: E402
 from norway_company_agent.evidence import utc_now  # noqa: E402
 from norway_company_agent.identity import apply_website_identity_gate  # noqa: E402
+from norway_company_agent.news import fetch_news_mentions  # noqa: E402
 from norway_company_agent.official import fetch_official_modules  # noqa: E402
 from norway_company_agent.website import fetch_website  # noqa: E402
 
@@ -38,7 +39,7 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--checkpoint-every", type=int, default=25)
     parser.add_argument("--resume", action="store_true")
-    parser.add_argument("--modules", default="registry,accounting_obligation,registry_live,financials,roles,group,locations,website")
+    parser.add_argument("--modules", default="registry,accounting_obligation,registry_live,financials,roles,group,locations,website,news")
     args = parser.parse_args()
 
     started_at = utc_now()
@@ -53,7 +54,7 @@ def main() -> None:
             if key in annotations[profile["organisation_number"]]:
                 profile[key] = annotations[profile["organisation_number"]][key]
     requested_modules = [item.strip() for item in args.modules.split(",") if item.strip()]
-    fetch_modules = set(requested_modules) - {"registry", "accounting_obligation", "website"}
+    fetch_modules = set(requested_modules) - {"registry", "accounting_obligation", "website", "news"}
     operations = {"requests": 0, "bytes": 0, "latencies_ms": []}
 
     def enrich(profile: dict) -> tuple[dict, dict]:
@@ -63,10 +64,14 @@ def main() -> None:
         if "website" in requested_modules:
             website_record, website_metrics = fetch_website(profile.get("website"))
             profile["evidence"]["website"] = apply_website_identity_gate(profile, website_record)["website"]
+        news_metrics = {"requests": 0, "bytes": 0, "latencies_ms": []}
+        if "news" in requested_modules:
+            news_record, news_metrics = fetch_news_mentions(profile)
+            profile["evidence"]["news"] = news_record
         metric = {
-            "requests": len(metrics) + website_metrics["requests"],
-            "bytes": sum(item.bytes_received for item in metrics) + website_metrics["bytes"],
-            "latencies_ms": [item.elapsed_ms for item in metrics] + website_metrics["latencies_ms"],
+            "requests": len(metrics) + website_metrics["requests"] + news_metrics["requests"],
+            "bytes": sum(item.bytes_received for item in metrics) + website_metrics["bytes"] + news_metrics["bytes"],
+            "latencies_ms": [item.elapsed_ms for item in metrics] + website_metrics["latencies_ms"] + news_metrics["latencies_ms"],
         }
         profile["run_metrics"] = metric
         return profile, metric
