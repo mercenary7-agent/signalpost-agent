@@ -21,8 +21,8 @@ DDG_UA = (
 # Polite global rate limit: one DDG request at a time, >= MIN_INTERVAL apart.
 _DDG_LOCK = threading.Lock()
 _DDG_LAST = [0.0]
-MIN_INTERVAL = 0.6
-MAX_QUERIES = 4
+MIN_INTERVAL = 0.4
+MAX_QUERIES = 5
 MAX_GUESSES = 3
 
 
@@ -81,7 +81,7 @@ def _is_challenge(html: str) -> bool:
     return "anomaly" in low or ("challenge" in low and "bots use" in low) or "result__a" not in html and len(html) < 20000 and "duckduckgo" in low and "result" not in low
 
 
-def ddg_search_query(query: str, *, timeout: float = 8.0) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def ddg_search_query(query: str, *, timeout: float = 5.0) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """One DuckDuckGo HTML query (no API key). Returns results in the same
     shape as the Brave web results plus audit hashes."""
     url = DDG_HTML_ENDPOINT + "?" + urllib.parse.urlencode({"q": query})
@@ -147,7 +147,7 @@ def domain_guesses(profile: dict[str, Any], limit: int = MAX_GUESSES) -> list[st
     return out
 
 
-def discover_official_website(profile: dict[str, Any], *, timeout: float = 8.0) -> tuple[dict[str, Any], dict[str, Any]]:
+def discover_official_website(profile: dict[str, Any], *, timeout: float = 5.0) -> tuple[dict[str, Any], dict[str, Any]]:
     """Multi-channel free website discovery.
 
     Channels: (1) DuckDuckGo HTML search with query variants (abstains when the
@@ -163,6 +163,7 @@ def discover_official_website(profile: dict[str, Any], *, timeout: float = 8.0) 
         f'"{name}" {org}',
         f'"{name}" hjemmeside',
         f'"{name}" offisiell nettside',
+        f'"{name}" orgnr',
     ]
     all_results: list[dict[str, Any]] = []
     query_log: list[dict[str, Any]] = []
@@ -204,6 +205,6 @@ def discover_official_website(profile: dict[str, Any], *, timeout: float = 8.0) 
         "selected_score": (selected or {}).get("score"),
         "domain_guesses": domain_guesses(profile),
         "policy": "Search results and domain guesses are only crawl candidates. Publication requires fetched-page exact-entity verification (apply_website_identity_gate).",
-        "method": "duckduckgo_html_search_v4 + deterministic_no_domain_guesses_v1",
+        "method": "duckduckgo_html_search_v5 + deterministic_no_domain_guesses_v1",
     }
     return discovery, total_metrics

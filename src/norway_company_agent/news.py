@@ -42,11 +42,11 @@ def _ddg_news_fallback(name: str, org: str, limit: int = 10) -> tuple[list[dict]
     metric = {"requests": 0, "bytes": 0, "latencies_ms": []}
     mentions: list[dict] = []
     seen: set[tuple[str, str]] = set()
-    queries = [f'"{name}" nyheter']
+    queries = [f'"{name}" nyheter', f'"{name}" i nyhetene', f'"{name}" site:no']
     for query in queries:
         if len(mentions) >= limit:
             break
-        results, m = ddg_search_query(query, timeout=8.0)
+        results, m = ddg_search_query(query, timeout=5.0)
         metric["requests"] += m.get("requests", 0)
         metric["bytes"] += m.get("bytes", 0)
         metric["latencies_ms"] += m.get("latencies_ms", [])
@@ -116,7 +116,7 @@ def fetch_news_mentions(profile: dict[str, Any], limit: int = 10, years: int = 2
             try:
                 started = datetime.now(timezone.utc)
                 request = urllib.request.Request(feed_url, headers={"User-Agent": NEWS_UA, "Accept": "application/rss+xml, application/xml"})
-                with urllib.request.urlopen(request, timeout=25) as response:
+                with urllib.request.urlopen(request, timeout=12) as response:
                     raw = response.read(2_000_000)
                 last_exc = None
                 source_label = label
@@ -128,7 +128,7 @@ def fetch_news_mentions(profile: dict[str, Any], limit: int = 10, years: int = 2
                 metric["requests"] += 1
                 if attempt < 1:
                     import time
-                    time.sleep(2)
+                    time.sleep(1)
         if ok:
             break
     if not raw:
