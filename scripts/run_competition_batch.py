@@ -17,6 +17,7 @@ from norway_company_agent.jobs_site import fetch_jobs_site  # noqa: E402
 from norway_company_agent.news import fetch_news_mentions  # noqa: E402
 from norway_company_agent.official import fetch_official_modules  # noqa: E402
 from norway_company_agent.website import fetch_website  # noqa: E402
+from norway_company_agent.web_search import discover_official_website  # noqa: E402
 
 
 def write_jsonl(path: Path, rows: list[dict]) -> None:
@@ -64,7 +65,40 @@ def main() -> None:
         website_metrics = {"requests": 0, "bytes": 0, "latencies_ms": []}
         if "website" in requested_modules:
             website_record, website_metrics = fetch_website(profile.get("website"))
-            profile["evidence"]["website"] = apply_website_identity_gate(profile, website_record)["website"]
+            gated = apply_website_identity_gate(profile, website_record)
+            website_record = gated["website"]
+            publishable = bool(((website_record.get("value") or {}).get("identity_assessment") or {}).get("publishable"))
+            if not publishable:
+                # v4: free multi-channel website discovery (DuckDuckGo HTML search when it
+                # answers, plus deterministic .no domain guesses), no API key. Publication
+                # still requires fetched-page exact-entity verification before it counts.
+                discovery, disc_metrics = discover_official_website(profile)
+                website_metrics["requests"] += disc_metrics["requests"]
+                website_metrics["bytes"] += disc_metrics["bytes"]
+                website_metrics["latencies_ms"] += disc_metrics["latencies_ms"]
+                candidates = []
+                if discovery.get("selected_url"):
+                    candidates.append(discovery["selected_url"])
+                for guess in discovery.get("domain_guesses") or []:
+                    if guess not in candidates and len(candidates) < 4:
+                        candidates.append(guess)
+                for candidate_url in candidates:
+                    cand_record, cand_metrics = fetch_website(candidate_url)
+                    website_metrics["requests"] += cand_metrics["requests"]
+                    website_metrics["bytes"] += cand_metrics["bytes"]
+                    website_metrics["latencies_ms"] += cand_metrics["latencies_ms"]
+                    gated_cand = apply_website_identity_gate(profile, cand_record)
+                    cand_record = gated_cand["website"]
+                    cand_publishable = bool(((cand_record.get("value") or {}).get("identity_assessment") or {}).get("publishable"))
+                    if cand_publishable:
+                        cand_record["discovery"] = discovery
+                        website_record = cand_record
+                        break
+                if website_record.get("status") != "available" or not bool(((website_record.get("value") or {}).get("identity_assessment") or {}).get("publishable")):
+                    website_record["discovery"] = discovery
+                    if website_record.get("status") == "available":
+                        website_record["note"] = "search/discovery candidates failed the exact-entity page gate; registry record kept"
+            profile["evidence"]["website"] = website_record
         news_metrics = {"requests": 0, "bytes": 0, "latencies_ms": []}
         if "news" in requested_modules:
             news_record, news_metrics = fetch_news_mentions(profile)
